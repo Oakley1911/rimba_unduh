@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rimba Unduh – tempel link, unduh langsung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--night:#06130d;--moss:#0e281b;--fern:#1f5a3c;--glow:#8dff9f;--amber:#ffd36b;--mist:#d4ecd9;--warn:#ffb454;--bad:#ff7a6b}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(120% 80% at 50% 0%,#12372a 0%,var(--night) 60%);color:var(--mist);font:400 1.05rem/1.6 Figtree,system-ui,sans-serif;overflow-x:hidden}
+#ff{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#trees{position:fixed;left:0;right:0;bottom:0;width:100%;height:28vh;pointer-events:none}
+main{position:relative;max-width:720px;margin:0 auto;padding:clamp(2.5rem,9vh,6rem) 1.25rem 32vh}
+h1{font:800 clamp(2.4rem,7vw,4rem)/1.05 Fraunces,serif;margin:0 0 .9rem;letter-spacing:-.01em;color:#f1fff4}
+.lead{max-width:34rem;margin:0 0 2rem;color:#a9cdb4}
+.brand{font:600 1.1rem Fraunces,serif;color:var(--glow);margin-bottom:2.5rem}
+form{display:flex;gap:.6rem;flex-wrap:wrap;padding:.6rem;border-radius:1.1rem;background:rgba(14,40,27,.85);box-shadow:0 0 0 1px var(--fern),0 0 48px -10px rgba(141,255,159,.4);transition:box-shadow .25s}
+form:focus-within{box-shadow:0 0 0 2px var(--glow),0 0 64px -6px rgba(141,255,159,.55)}
+input{flex:1 1 14rem;min-width:0;background:transparent;border:0;color:#fff;font:inherit;padding:.8rem .9rem;outline:0}
+input::placeholder{color:#6f9a7e}
+button,.btn{font:600 1rem Figtree,sans-serif;border:0;border-radius:.8rem;padding:.8rem 1.4rem;background:var(--glow);color:#06210f;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.btn:hover{background:#b4ffc0}
+button:focus-visible,.btn:focus-visible,.hist button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+button:disabled{opacity:.55;cursor:wait}
+#out{margin-top:1.5rem;padding:1.4rem;border-radius:1.1rem;background:rgba(10,30,21,.9);border:1px solid var(--fern)}
+#out[hidden],#hist[hidden]{display:none}
+.file{font:600 1.35rem/1.25 Fraunces,serif;color:#fff;word-break:break-all;margin:0 0 .3rem}
+.meta{color:#8fb59b;margin:0 0 1rem}
+.row{display:flex;gap:.7rem;align-items:flex-start;margin:.4rem 0}
+.dot{flex:none;width:.7rem;height:.7rem;border-radius:50%;margin-top:.5rem;background:#4b6b57}
+.row.run .dot{background:var(--amber);animation:p 1s infinite alternate}
+.row.ok .dot{background:var(--glow)}.row.warn .dot{background:var(--warn)}.row.bad .dot{background:var(--bad)}
+@keyframes p{to{opacity:.25}}
+.verdict{margin:1.1rem 0 .9rem;font:600 1.2rem Fraunces,serif}
+.verdict.ok{color:var(--glow)}.verdict.warn{color:var(--warn)}.verdict.bad{color:var(--bad)}
+.btn.risk{background:var(--bad)}
+.err{color:var(--bad);margin:0}
+#hist{margin-top:2rem}
+#hist h2{font:600 1.1rem Fraunces,serif;margin:0 0 .5rem;color:#cdeed6}
+.hist{display:flex;flex-direction:column;gap:.2rem}
+.hist button{background:none;color:var(--mist);text-align:left;padding:.45rem .6rem;border-radius:.6rem;font-weight:400;word-break:break-all}
+.hist button:hover{background:rgba(141,255,159,.1)}
+.clear{background:none;color:#8fb59b;padding:.3rem .6rem;margin-top:.4rem;font-weight:400;text-decoration:underline}
+@media(prefers-reduced-motion:reduce){.row.run .dot{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="ff" aria-hidden="true"></canvas>
+<svg id="trees" aria-hidden="true" preserveAspectRatio="none"></svg>
+<main>
+  <div class="brand">Rimba Unduh</div>
+  <h1>Tempel link, dapat file langsungnya.</h1>
+  <p class="lead">Tidak ada halaman iklan di tengah jalan. Setiap link diperiksa dulu lewat VirusTotal sebelum kamu mengunduh.</p>
+
+  <form id="f">
+    <input id="u" type="url" required placeholder="Tempel link unduhan di sini" aria-label="Link unduhan" autocomplete="off">
+    <button id="go">Periksa link</button>
+  </form>
+
+  <section id="out" hidden aria-live="polite"></section>
+
+  <section id="hist" hidden>
+    <h2>Riwayat link</h2>
+    <div class="hist" id="hl"></div>
+    <button class="clear" id="clr" type="button">Hapus riwayat</button>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s), sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const KEY='rimba-riwayat';
+const api=(op,p)=>fetch('/api?'+new URLSearchParams({op,...p})).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.message||'Permintaan gagal'),{code:j.error});return j});
+const size=n=>n==null?'ukuran tidak diketahui':n<1e6?(n/1e3).toFixed(0)+' KB':n<1e9?(n/1e6).toFixed(1)+' MB':(n/1e9).toFixed(2)+' GB';
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+
+/* Riwayat */
+const load=()=>{try{return JSON.parse(localStorage.getItem(KEY))||[]}catch{return[]}};
+const save=a=>{try{localStorage.setItem(KEY,JSON.stringify(a))}catch{}};
+function drawHist(){
+  const a=load(), box=$('#hl'); box.replaceChildren();
+  $('#hist').hidden=!a.length;
+  a.forEach(i=>{const b=el('button',null,i.name);b.type='button';b.title=i.url;b.onclick=()=>{$('#u').value=i.url;check(i.url)};box.append(b)});
+}
+$('#clr').onclick=()=>{save([]);drawHist()};
+
+/* Pemeriksaan */
+function row(parent,text){const r=el('div','row run');r.append(el('span','dot'),el('span',null,text));parent.append(r);return{set(cls,t){r.className='row '+cls;r.lastChild.textContent=t}}}
+const count=s=>(s?.malicious||0)+(s?.suspicious||0);
+
+async function check(raw){
+  const out=$('#out'),go=$('#go');out.hidden=false;out.replaceChildren();go.disabled=true;
+  const st=row(out,'Mencari file di balik link…');
+  let info;
+  try{info=await api('resolve',{url:raw})}
+  catch(e){out.replaceChildren(el('p','err',e.message));go.disabled=false;return}
+  st.set('ok','File ditemukan');
+  out.replaceChildren(el('p','file',info.name),el('p','meta',`${size(info.size)} · ${info.type} · dari ${info.host}`));
+  const h=load().filter(i=>i.url!==raw);h.unshift({name:info.name,url:raw});save(h.slice(0,8));drawHist();
+
+  const r1=row(out,'Memeriksa alamat link…'),r2=row(out,'Memeriksa isi file…');
+  const urlScan=(async()=>{
+    const{id}=await api('scan',{url:info.url});
+    for(let i=0;i<14;i++){await sleep(6000);const r=await api('report',{id});if(r.status==='completed')return r.stats}
+    throw new Error('Pemeriksaan alamat belum selesai')
+  })();
+  const fileScan=api('hash',{url:info.url});
+  const [a,b]=await Promise.allSettled([urlScan,fileScan]);
+
+  let level=0,known=0;
+  if(a.status==='fulfilled'){const n=count(a.value);level=Math.max(level,n>2?2:n>0?1:0);known++;r1.set(n>2?'bad':n>0?'warn':'ok',n?`Alamat link ditandai oleh ${n} mesin pemindai`:'Alamat link bersih')}
+  else r1.set('warn','Alamat link belum bisa diperiksa: '+a.reason.message);
+  if(b.status==='fulfilled'){
+    const v=b.value;
+    if(v.skipped)r2.set('warn',v.skipped);
+    else if(!v.found)r2.set('warn','File ini belum pernah dianalisis VirusTotal, jadi isinya belum bisa dipastikan');
+    else{const n=count(v.stats);known++;level=Math.max(level,n>2?2:n>0?1:0);r2.set(n>2?'bad':n>0?'warn':'ok',n?`Isi file ditandai oleh ${n} mesin pemindai`:'Isi file bersih menurut VirusTotal')}
+  }else r2.set('warn','Isi file belum bisa diperiksa: '+b.reason.message);
+
+  const msg=!known?['warn','Belum ada hasil pemeriksaan. Unduh dengan hati-hati.']:level==2?['bad','Berbahaya. Sebaiknya jangan diunduh.']:level==1?['warn','Ada peringatan. Periksa dulu sumbernya.']:['ok','Aman menurut hasil yang tersedia.'];
+  out.append(el('p','verdict '+msg[0],msg[1]));
+  const dl=el('a','btn'+(level==2?' risk':''),level==2?'Tetap unduh (berisiko)':'Unduh file');
+  dl.href=info.url;dl.rel='noreferrer noopener';dl.download=info.name;
+  if(level==2)dl.onclick=e=>{if(!confirm('File ini ditandai berbahaya. Yakin ingin mengunduh?'))e.preventDefault()};
+  out.append(dl);go.disabled=false;
+}
+$('#f').onsubmit=e=>{e.preventDefault();check($('#u').value.trim())};
+drawHist();
+
+/* Kunang-kunang */
+const cv=$('#ff'),cx=cv.getContext('2d'),still=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let W,H,fl=[];
+function fit(){W=cv.width=innerWidth;H=cv.height=innerHeight;fl=Array.from({length:Math.round(W*H/32000)+14},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.8+.8,a:Math.random()*6.28,s:Math.random()*.3+.1,p:Math.random()*6.28}))}
+function tick(t){
+  cx.clearRect(0,0,W,H);
+  for(const f of fl){
+    if(!still){f.a+=(Math.random()-.5)*.15;f.x=(f.x+Math.cos(f.a)*f.s+W)%W;f.y=(f.y+Math.sin(f.a)*f.s+H)%H}
+    const o=still?.7:.35+.65*Math.abs(Math.sin(t/900+f.p));
+    const g=cx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r*7);
+    g.addColorStop(0,`rgba(255,226,120,${o})`);g.addColorStop(1,'rgba(255,226,120,0)');
+    cx.fillStyle=g;cx.beginPath();cx.arc(f.x,f.y,f.r*7,0,6.28);cx.fill();
+  }
+  if(!still)requestAnimationFrame(tick)
+}
+addEventListener('resize',fit);fit();requestAnimationFrame(tick);
+
+/* Siluet pohon */
+(function(){
+  const s=$('#trees'),n='http://www.w3.org/2000/svg';s.setAttribute('viewBox','0 0 1200 200');
+  [['#0a2418',.9,38],['#04100a',1,26]].forEach(([c,sc,w],li)=>{
+    const p=document.createElementNS(n,'path');let d='M0 200';
+    for(let x=-20;x<1240;x+=w*(1.4+Math.random()*.9)){
+      const h=(70+Math.random()*90)*sc+li*10,b=200;
+      d+=`L${x-w} ${b}L${x-w*.55} ${b-h*.4}L${x-w*.8} ${b-h*.4}L${x-w*.3} ${b-h*.72}L${x-w*.5} ${b-h*.72}L${x} ${b-h}L${x+w*.5} ${b-h*.72}L${x+w*.3} ${b-h*.72}L${x+w*.8} ${b-h*.4}L${x+w*.55} ${b-h*.4}L${x+w} ${b}`;
+    }
+    p.setAttribute('d',d+'L1240 200Z');p.setAttribute('fill',c);s.append(p);
+  });
+})();
+</script>
+</body>
+</html>
